@@ -7,8 +7,8 @@ export default function RecentTransactions() {
                 Recent Transactions
             </div>
             <div className="flex flex-col gap-2">
-                {[...Array(5)].map(() => (
-                    <div className="flex flex-row items-center justify-between rounded-lg border-t-[1px] border-gray p-2">
+                {[...Array(5)].map((val, idx) => (
+                    <div key={idx} className="flex flex-row items-center justify-between rounded-lg border-t-[1px] border-gray p-2">
                         <div className="flex flex-row items-center justify-start gap-2">
                             <div className="w-[35px] h-[40px] flex items-center justify-center bg-blue text-white rounded">
                                 <span className="font-medium text-2xl font-brand">T</span>

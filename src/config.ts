@@ -8,14 +8,16 @@ enum Modes {
 interface IAppConfig {
     mode: 'test' | 'live',
     publicKey: string,
+    apiUrl: string
 }
 
-const mode = Modes.test;
-const publicKey = mode as Modes == Modes.live ? 'pk_live_9da718a344de69de7a6bae8cc888cbb621a12419' : 'pk_test_1d370c765cee4bad118143a4e1f01c0a9e1c6ce1' 
+const mode = Modes.live;
+const publicKey = mode as Modes == Modes.live ? 'pk_live_b939c28185f9b907669fe18fa7d138bc0dc8f71f' : 'pk_test_dfe0b6ac01f35dc0d4847f6a5d8f5d60f3dc78d4' 
 
 const config: IAppConfig = {
     mode,
-    publicKey
+    publicKey,
+    apiUrl: 'http://localhost:3000',
 }
 
 export default config;
