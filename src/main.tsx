@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider, RouteObject, Outlet } from 'react-
 import Layout from './Layout'
 import HomeScreen from './pages/HomeScreen'
 import TransferScreen from './pages/TransferScreen'
+import CardsScreen from './pages/CardsScreen';
 
 const routes: RouteObject[] = [
   {
@@ -16,6 +17,7 @@ const routes: RouteObject[] = [
       { path: '/', element: <HomeScreen /> },
       { path: '/profile', element: <h1>Profile page</h1> },
       { path: '/transfer', element: <TransferScreen /> },
+      { path: '/manage-cards', element: <CardsScreen /> },
     ]
   }
 ]

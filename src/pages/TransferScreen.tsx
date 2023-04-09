@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { BsBank, BsPlus, BsCreditCard } from 'react-icons/bs';
+import { BiLoaderCircle } from 'react-icons/bi'
 import { usePaystackPayment } from 'react-paystack'
 import { PaystackProps } from 'react-paystack/dist/types';
 import config from '../config';
 import axios, { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 type Card = { name: String, bin: String, last4: String, auth_code: string }
 const User: { firstName: string, lastName: string, email: string, phoneNumber: string } = {
@@ -15,6 +17,31 @@ const User: { firstName: string, lastName: string, email: string, phoneNumber: s
 };
 
 const { apiUrl } = config;
+
+const PaystackDefaultConfig: PaystackProps = {
+    email: User.email,
+    amount: 50 * 100,
+    publicKey: config.publicKey,
+    firstname: User.firstName,
+    lastname: User.lastName,
+    phone: User.phoneNumber
+};
+
+async function initiateTransfer({account_name, account_number, bank_code, email, amount, ref_code, auth_code}: any) {
+    const payload: any = { account_name, account_number, bank_code, email, amount }
+    ref_code ? payload.ref_code = ref_code : payload.authorization_code = auth_code
+   
+    try {
+        const response = await axios.post(`${apiUrl}/payments/initiate-transfer`, payload);
+        const { message, data } = response.data;
+        console.log(data);
+        toast.success(message);
+    } catch (error: any) {
+        console.log(error);
+        const errorMsg = error?.response?.data?.message || error?.response?.data;
+        toast.error(errorMsg || error?.message);
+    }
+}
 
 export default function TransferScreen() {
     const [amount, setAmount] = useState<number>();
@@ -28,36 +55,13 @@ export default function TransferScreen() {
     const [payWithNewCard, setPayWithNewCard] = useState<Boolean>(false);
 
     const [resolveAcctError, setResolveAcctError] = useState<string>('');
+    const [paystackConfig, setPaystackConfig] = useState<PaystackProps>(PaystackDefaultConfig);
 
-    const paystackConfig: PaystackProps = {
-        email: User.email,
-        amount: 50 * 100,
-        publicKey: config.publicKey,
-        firstname: User.firstName,
-        lastname: User.lastName,
-        phone: User.phoneNumber
-    }
-    const onSuccess = (...args: any[]) => {
-        const reference = args[0]?.reference;
+    // loading states
+    const [transferLoading, setTransferLoading] = useState<boolean>(false);
 
-        async function verifyTransaction() {
-            try {
-                const response = await axios.get(`${apiUrl}/payments/verify/${reference}`);
-                const { message, data } = response.data;
-                toast.success(message);
-                const { authorization } = data || {};
-                const { bin, last4, bank, authorization_code, reusable } = authorization || {};
-                if (!reusable) {
-                    toast.warn('You card is not reusable. Please use another card.');
-                    return;
-                }
-                setCards(prev => [...prev, { bin, last4, name: bank, auth_code: authorization_code }]);
-            } catch (error: any) {
-                toast.error(error?.message);
-            }
-        }
-        verifyTransaction();
-    }
+    const navigate = useNavigate();
+    
     const onClose = () => {
         console.log('closed.');
     }
@@ -73,7 +77,6 @@ export default function TransferScreen() {
             try {
                 const response = await axios.post(`${apiUrl}/banks/resolve`, { accountNumber, bankCode })
                 const { data } = response.data;
-                console.log(data);
                 setAccountName(data?.account_name);
             } catch (error: any) {
                 setResolveAcctError(error?.message);
@@ -83,6 +86,9 @@ export default function TransferScreen() {
     }, [accountNumber, bankCode]);
 
     useEffect(() => {
+        setCards([{
+            name: 'First bank', bin: '123456', last4: '0789', auth_code: 'AUTH_wdjh2ih'
+        }]);
         async function fetchBanks() {
             try {
                 const response = await fetch(config.apiUrl + '/banks.json');
@@ -96,35 +102,36 @@ export default function TransferScreen() {
     }, []);
 
     const handleTransfer = async () => {
-        async function initiateTransfer(reference = '') {
-            const payload: any = {
+        let chargeAmt = Number(amount) * 100;
+        setPaystackConfig(prev => ({...prev, amount: chargeAmt}));
+        
+        if (payWithNewCard) {
+            setTransferLoading(true);
+            setTimeout(() => {
+                if (paystackConfig.amount === chargeAmt)
+                initializePayment((...args: any[]) => {
+                    const reference = args[0]?.reference;
+                    initiateTransfer({
+                        account_name: accountName,
+                        account_number: accountNumber,
+                        bank_code: bankCode,
+                        email: User.email,
+                        amount: chargeAmt,
+                        ref_code: reference
+                    });
+                }, onClose)
+                setTransferLoading(false);
+            }, 2500);
+        } else if (activeCard?.auth_code) {
+            setTransferLoading(true);
+            initiateTransfer({
                 account_name: accountName,
                 account_number: accountNumber,
                 bank_code: bankCode,
                 email: User.email,
-                amount: Number(amount) * 100,
-            }
-            payWithNewCard ? payload.ref_code = reference : payload.authorization_code = activeCard?.auth_code
-           
-            try {
-                const response = await axios.post(`${apiUrl}/payments/initiate-transfer`, payload);
-                const { message, data } = response.data;
-                console.log(data);
-                toast.success(message);
-            } catch (error: any) {
-                console.log(error);
-                const errorMsg = error?.response?.data?.error || error?.response?.data;
-                toast.error(errorMsg || error?.message);
-            }
-        }
-
-        if (payWithNewCard) {
-            initializePayment((...args: any[]) => {
-                const reference = args[0]?.reference;
-                initiateTransfer(reference);
-            }, onClose);
-        } else if (activeCard?.auth_code) {
-            initiateTransfer();
+                amount: chargeAmt,
+                auth_code: activeCard?.auth_code
+            }).finally(() => setTransferLoading(false));
         } else {
             toast.warning('You have to select a payment method');
         }
@@ -176,20 +183,21 @@ export default function TransferScreen() {
                             </div>
                         </div>
                     ))}
-                    <div className="flex flex-row gap-3 border border-gray-light rounded-xl p-3" onClick={() => {setPayWithNewCard(true); setActiveCard(null)}} style={{ borderColor: payWithNewCard ? '#058A72' : '' }} >
+                    <div className="flex flex-row items-center gap-3 border border-gray-light rounded-xl p-3" onClick={() => {setPayWithNewCard(true); setActiveCard(null)}} style={{ borderColor: payWithNewCard ? '#058A72' : '' }} >
                         <div className="rounded-full flex justify-center items-center h-[50px] max-h-full aspect-square border p-3"><BsCreditCard size={'auto'} /> </div>
                         <div className="">Pay with card</div>
                     </div>
-                    <div className="flex flex-row justify-center items-center gap-2 border-2 border-gray-dark border-dashed rounded-xl p-[10px]  cursor-pointer" onClick={() => initializePayment(onSuccess, onClose)}>
+                    <div className="flex flex-row justify-center items-center gap-2 border-2 border-gray-dark border-dashed rounded-xl p-[10px]  cursor-pointer" onClick={() => navigate('/manage-cards')}>
                         <div className=""><BsPlus size={30} /> </div>
-                        <div className="italic" >
-                            Add payment card
+                        <div className="italic flex flex-row items-center flex-nowrap gap-4" >
+                            Add payment card 
                         </div>
                     </div>
                 </div>
                 <div className="w-full py-2">
-                    <button onClick={handleTransfer} className='w-full py-[10px] rounded-lg text-white bg-blue disabled:bg-opacity-20' disabled={isNaN(amount as number) || Number(amount) < 50 || !accountName}>
+                    <button onClick={handleTransfer} className='w-full flex flex-row items-center justify-center flex-nowrap gap-3 py-[10px] rounded-lg text-white bg-blue disabled:bg-opacity-20' disabled={isNaN(amount as number) || Number(amount) < 50 || !accountName}>
                         {payWithNewCard ? 'Transfer with card' : 'Transfer'} - {amount && `NGN${amount}`}
+                        {transferLoading && (<BiLoaderCircle id='loader' />)}
                     </button>
                 </div>
             </div>
