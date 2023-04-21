@@ -15,7 +15,7 @@ export default function RecentTransactions() {
                             </div>
                             <div className="grid">
                                 <span className="">Transfer to Marvin</span>
-                                <span className="text-blue text-opacity-70 text-sm">Mar 24, 2023</span>
+                                <span className="text-blue dark:text-gray-light text-opacity-70 text-sm">Mar 24, 2023</span>
                             </div>
                         </div>
                         <div className="font-medium text-xl">6500</div>

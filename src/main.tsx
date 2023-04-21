@@ -8,6 +8,9 @@ import Layout from './Layout'
 import HomeScreen from './pages/HomeScreen'
 import TransferScreen from './pages/TransferScreen'
 import CardsScreen from './pages/CardsScreen';
+import LoginScreen from './pages/LoginScreen';
+import RegisterScreen from './pages/RegisterScreen';
+import { AuthProvider } from './context/AuthProvider';
 
 const routes: RouteObject[] = [
   {
@@ -19,6 +22,14 @@ const routes: RouteObject[] = [
       { path: '/transfer', element: <TransferScreen /> },
       { path: '/manage-cards', element: <CardsScreen /> },
     ]
+  },
+  {
+    path: '/login',
+    element: <LoginScreen />,
+  },
+  {
+    path: '/register',
+    element: <RegisterScreen />
   }
 ]
 
@@ -26,7 +37,9 @@ const router = createBrowserRouter(routes)
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <ToastContainer />
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <ToastContainer />
+      <RouterProvider router={router} />
+    </AuthProvider>
   </React.StrictMode>,
 )

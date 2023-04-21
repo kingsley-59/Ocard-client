@@ -10,8 +10,8 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color: #05478A;
+  background-color: #f9f9f9;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -21,13 +21,18 @@
 }
 
 a {
-  font-weight: 500;
+  font-weight: 400;
   color: #05478A;
-  text-decoration: inherit;
+  text-decoration: underline;
 }
 
 input:active, input:focus {
   outline: none;
+}
+
+footer {
+  background-color: #022241;
+  width: 100%;
 }
 
 @keyframes spin {
@@ -40,15 +45,23 @@ input:active, input:focus {
 }
 
 
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    color: #05478A;
-    background-color: #ffffff;
+    color: #dde4ec;
+    background-color: #05478A;
   }
-  a:hover {
-    color: #05478A;
+  a {
+    color: #dde4ec;
+  }
+  input {
+    background-color: #dde4ec;
+    color: #022241;
   }
   button {
     background-color: #f9f9f9;
+  }
+  footer {
+    background-color: #022241;
+    width: 100%;
   }
 }
