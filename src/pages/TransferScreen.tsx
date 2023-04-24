@@ -7,6 +7,8 @@ import config from '../config';
 import axios, { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
+import { FlutterwaveConfig } from 'flutterwave-react-v3/dist/types';
 
 type Card = { name: String, bin: String, last4: String, auth_code: string }
 const User: { firstName: string, lastName: string, email: string, phoneNumber: string } = {
@@ -27,10 +29,28 @@ const PaystackDefaultConfig: PaystackProps = {
     phone: User.phoneNumber
 };
 
-async function initiateTransfer({account_name, account_number, bank_code, email, amount, ref_code, auth_code}: any) {
+const FlutterwaveDefaultOps: FlutterwaveConfig = {
+    amount: 50,
+    customer: {
+        email: User.email,
+        name: `${User.firstName} ${User.lastName}`,
+        phone_number: User.phoneNumber,
+    },
+    currency: 'NGN',
+    payment_options: 'card,mobilemoney,ussd',
+    public_key: config.flwPublicKey,
+    tx_ref: String(Date.now()),
+    customizations: {
+        description: '',
+        title: '',
+        logo: ''
+    }
+}
+
+async function initiateTransfer({ account_name, account_number, bank_code, email, amount, ref_code, auth_code }: any) {
     const payload: any = { account_name, account_number, bank_code, email, amount }
     ref_code ? payload.ref_code = ref_code : payload.authorization_code = auth_code
-   
+
     try {
         const response = await axios.post(`${apiUrl}/payments/initiate-transfer`, payload);
         const { message, data } = response.data;
@@ -56,16 +76,18 @@ export default function TransferScreen() {
 
     const [resolveAcctError, setResolveAcctError] = useState<string>('');
     const [paystackConfig, setPaystackConfig] = useState<PaystackProps>(PaystackDefaultConfig);
+    const [flwConfig, setFlwConfig] = useState<FlutterwaveConfig>(FlutterwaveDefaultOps)
 
     // loading states
     const [transferLoading, setTransferLoading] = useState<boolean>(false);
 
     const navigate = useNavigate();
-    
+
     const onClose = () => {
         console.log('closed.');
     }
-    const initializePayment = usePaystackPayment(paystackConfig);
+    // const initializePayment = usePaystackPayment(paystackConfig);
+    const initializePayment = useFlutterwave(flwConfig);
 
     useEffect(() => {
         if (accountNumber.length !== 10 || !bankCode) {
@@ -76,7 +98,8 @@ export default function TransferScreen() {
         async function resolveAccount() {
             try {
                 const response = await axios.post(`${apiUrl}/banks/resolve`, { accountNumber, bankCode })
-                const { data } = response.data;
+                const { data, message } = response.data;
+                toast.success(message);
                 setAccountName(data?.account_name);
             } catch (error: any) {
                 setResolveAcctError(error?.message);
@@ -86,13 +109,17 @@ export default function TransferScreen() {
     }, [accountNumber, bankCode]);
 
     useEffect(() => {
+        setFlwConfig(prev => ({ ...prev, amount: Number(amount) }));
+    }, [amount])
+
+    useEffect(() => {
         setCards([{
             name: 'First bank', bin: '123456', last4: '0789', auth_code: 'AUTH_wdjh2ih'
         }]);
         async function fetchBanks() {
             try {
-                const response = await fetch(config.apiUrl + '/banks.json');
-                const data = await response.json();
+                const response = await fetch(apiUrl + '/banks/all');
+                const { data } = await response.json();
                 setAvailableBanks(data?.banks);
             } catch (error: any) {
                 alert(error?.message);
@@ -102,15 +129,14 @@ export default function TransferScreen() {
     }, []);
 
     const handleTransfer = async () => {
-        let chargeAmt = Number(amount) * 100;
-        setPaystackConfig(prev => ({...prev, amount: chargeAmt}));
-        
+        let chargeAmt = Number(amount);
+
         if (payWithNewCard) {
             setTransferLoading(true);
-            setTimeout(() => {
-                if (paystackConfig.amount === chargeAmt)
-                initializePayment((...args: any[]) => {
-                    const reference = args[0]?.reference;
+            console.log()
+            initializePayment({
+                callback: ({ tx_ref }) => {
+                    const reference = tx_ref;
                     initiateTransfer({
                         account_name: accountName,
                         account_number: accountNumber,
@@ -119,9 +145,10 @@ export default function TransferScreen() {
                         amount: chargeAmt,
                         ref_code: reference
                     });
-                }, onClose)
-                setTransferLoading(false);
-            }, 2500);
+                    closePaymentModal();
+                }, onClose
+            })
+            setTransferLoading(false);
         } else if (activeCard?.auth_code) {
             setTransferLoading(true);
             initiateTransfer({
@@ -159,7 +186,7 @@ export default function TransferScreen() {
                     </div>
 
                 </div>
-                <div className="w-full md:min-h-[180px] flex flex-row justify-center items-center bg-gray rounded-xl p-4">
+                <div className="w-full md:min-h-[180px] flex flex-row justify-center items-center bg-gray dark:bg-gray-dark rounded-xl p-4">
                     {accountName ? (
                         <span className="font-medium">{accountName}</span>
                     ) : resolveAcctError ? (
@@ -172,10 +199,14 @@ export default function TransferScreen() {
             <div className="flex flex-col justify-start">
                 <div className="w-full flex flex-col gap-3">
                     <label htmlFor="amount11">Amount</label>
-                    <input type="number" value={amount} onChange={e => setAmount(e.target.value as unknown as number)} id="amount11" className='w-full border-2 p-2 border-gray rounded-lg placeholder:italic placeholder:text-blue-400 placeholder:text-sm' placeholder='at least NGN50' />
+                    <div className="w-full mb-2">
+                        <input type="number" value={amount} onChange={e => setAmount(e.target.value as unknown as number)} id="amount11" className='w-full border-2 p-2 border-gray rounded-lg placeholder:italic placeholder:text-blue-400 placeholder:text-sm' placeholder='at least NGN50' />
+                        {amount as number < 50 && <span className="text-orange text-xs">Amount must be greater than NGN50</span>}
+                    </div>
+
                     <div className="font-light italic">Transfer from:</div>
                     {cards.map((card, idx) => (
-                        <div key={idx} className="flex flex-row gap-3 border border-gray-light rounded-xl p-3" onClick={() => {setPayWithNewCard(false); setActiveCard(card)}} style={{ borderColor: card.bin === activeCard?.bin ? '#058A72' : '' }}>
+                        <div key={idx} className="flex flex-row gap-3 border border-gray-light rounded-xl p-3" onClick={() => { setPayWithNewCard(false); setActiveCard(card) }} style={{ borderColor: card.bin === activeCard?.bin ? '#058A72' : '' }}>
                             <div className="rounded-full flex justify-center items-center h-[50px] max-h-full aspect-square border p-3"><BsBank size={'auto'} /> </div>
                             <div className="flex flex-col gap-2 items-start">
                                 <div className="">{card.name}</div>
@@ -183,19 +214,19 @@ export default function TransferScreen() {
                             </div>
                         </div>
                     ))}
-                    <div className="flex flex-row items-center gap-3 border border-gray-light rounded-xl p-3" onClick={() => {setPayWithNewCard(true); setActiveCard(null)}} style={{ borderColor: payWithNewCard ? '#058A72' : '' }} >
+                    <div className="flex flex-row items-center gap-3 border border-gray-light rounded-xl p-3" onClick={() => { setPayWithNewCard(true); setActiveCard(null) }} style={{ borderColor: payWithNewCard ? '#058A72' : '' }} >
                         <div className="rounded-full flex justify-center items-center h-[50px] max-h-full aspect-square border p-3"><BsCreditCard size={'auto'} /> </div>
                         <div className="">Pay with card</div>
                     </div>
                     <div className="flex flex-row justify-center items-center gap-2 border-2 border-gray-dark border-dashed rounded-xl p-[10px]  cursor-pointer" onClick={() => navigate('/manage-cards')}>
                         <div className=""><BsPlus size={30} /> </div>
                         <div className="italic flex flex-row items-center flex-nowrap gap-4" >
-                            Add payment card 
+                            Add payment card
                         </div>
                     </div>
                 </div>
                 <div className="w-full py-2">
-                    <button onClick={handleTransfer} className='w-full flex flex-row items-center justify-center flex-nowrap gap-3 py-[10px] rounded-lg text-white bg-blue disabled:bg-opacity-20' disabled={isNaN(amount as number) || Number(amount) < 50 || !accountName}>
+                    <button onClick={handleTransfer} className='w-full flex flex-row items-center justify-center flex-nowrap gap-3 py-[10px] rounded-lg text-white dark:text-blue bg-blue dark:bg-white disabled:bg-opacity-70' disabled={isNaN(amount as number) || Number(amount) < 50 || !accountName}>
                         {payWithNewCard ? 'Transfer with card' : 'Transfer'} - {amount && `NGN${amount}`}
                         {transferLoading && (<BiLoaderCircle id='loader' />)}
                     </button>

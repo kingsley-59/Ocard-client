@@ -26,6 +26,10 @@ a {
   text-decoration: underline;
 }
 
+a, input {
+  cursor: pointer;
+}
+
 input:active, input:focus {
   outline: none;
 }
